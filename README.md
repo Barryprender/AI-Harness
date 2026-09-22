@@ -248,6 +248,13 @@ Stated plainly, because overclaiming here costs more than it earns.
   in every case and they are meant to be deleted by adoption.
 - **`charter-check.sh` probes for existence, not for content.** It can tell
   you there is no `SECURITY.md`. It cannot tell you the one you have is true.
+- **The method skills are not published here.** The configuration this came
+  from also carries on-demand skills: house standards for HTML, CSS and
+  TypeScript, and writers for ADRs and project charters. They are why
+  [CLAUDE.md](CLAUDE.md) is 83 lines rather than 400 — a rule that only matters
+  when you open a stylesheet should not be loaded on every turn. They are
+  opinions rather than mechanism, so they stayed private. The mechanism is
+  here; the taste is not.
 - **This is extracted from a private configuration, generalized.** The
   mechanism is what ran; the specific checks in the original were tied to
   projects that are not mine to publish.
