@@ -100,7 +100,10 @@ if ! out=$(go test -count=1 -v ./... 2>&1); then
     fail "go test" "$(printf '%s' "$out" | grep -E '^(---|\s+---) FAIL|^FAIL' | head -20)"
 fi
 
-skipped=$(printf '%s' "$out" | grep -c -- '--- SKIP' 2>/dev/null || echo 0)
+# grep -c already prints 0 when it matches nothing; it just exits 1 while doing
+# it. Adding "|| echo 0" appends a second 0 and the test below then compares
+# the string "0 0" against an integer.
+skipped=$(printf '%s' "$out" | grep -c -- '--- SKIP')
 if [ "${skipped:-0}" -gt 0 ]; then
     cannot_run "$skipped test(s)" "they skipped, usually a missing service or build tag - a skipped test has not passed"
     printf '%s\n\n' "$(printf '%s' "$out" | grep -- '--- SKIP' | head -10)" >> "$notes"
