@@ -32,11 +32,26 @@ cat > /dev/null   # drain the payload
 # Nothing changed this turn: nothing to check.
 [ -n "$(git status --porcelain 2>/dev/null | head -1)" ] || exit 0
 
+# JSON string escaping, one character at a time. The obvious version uses
+# gsub, and the obvious version is wrong: a backslash in a gsub replacement is
+# processed twice, so the escape for a quote came out as two backslashes and a
+# quote and ended the JSON string early. Compiler output is full of quotes.
+# Comparing characters against sprintf("%c", 92) has no such ambiguity.
 esc() {
-    tr -d '\000-\010\013\014\016-\037' | awk '
-        { gsub(/\\/, "\\\\\\\\"); gsub(/"/, "\\\\\""); gsub(/\t/, "    ")
-          if (NR > 1) printf "\\n"
-          printf "%s", $0 }'
+    tr -d '\000-\010\013-\037' | awk '
+        BEGIN { bs = sprintf("%c", 92); q = sprintf("%c", 34) }
+        {
+            if (NR > 1) printf "%s", bs "n"
+            out = ""
+            for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == bs)        out = out bs bs
+                else if (c == q)    out = out bs q
+                else if (c == "\t") out = out "    "
+                else                out = out c
+            }
+            printf "%s", out
+        }'
 }
 
 report() { # $1 = message
