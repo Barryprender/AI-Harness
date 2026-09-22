@@ -68,8 +68,11 @@ git -C "$d" add . >/dev/null 2>&1
 git -C "$d" commit -qm seed >/dev/null 2>&1
 got=$(decide "$d")
 rm -rf "$d"
-[ "$got" = silent ] && ok "clean tree, nothing changed: silent" \
-    || bad "clean tree, nothing changed: expected silent, got $got"
+if [ "$got" = silent ]; then
+    ok "clean tree, nothing changed: silent"
+else
+    bad "clean tree, nothing changed: expected silent, got $got"
+fi
 
 # The block has to carry the failing output back, or the agent is told only
 # that something is wrong and not what.
@@ -136,8 +139,11 @@ exit 1")
 (cd "$d" && printf '{}' | sh "$GATE" >/dev/null 2>&1)
 rc=$?
 rm -rf "$d"
-[ "$rc" -eq 0 ] && ok "the gate itself exits 0 while blocking" \
-    || bad "the gate itself exits 0 while blocking: got $rc"
+if [ "$rc" -eq 0 ]; then
+    ok "the gate itself exits 0 while blocking"
+else
+    bad "the gate itself exits 0 while blocking: got $rc"
+fi
 
 printf '\n%d/%d passed\n' "$pass" "$((pass + fail))"
 [ "$fail" -eq 0 ]
