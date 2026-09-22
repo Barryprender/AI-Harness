@@ -64,8 +64,11 @@ esac
 d=$(scratch "$(body 0)")
 out=$(run "$d")
 rm -rf "$d"
-[ -z "$out" ] && ok "a passing verify.sh is silent" \
-    || bad "a passing verify.sh is silent: got $out"
+if [ -z "$out" ]; then
+    ok "a passing verify.sh is silent"
+else
+    bad "a passing verify.sh is silent: got $out"
+fi
 
 # --- a clean tree is not this hook's business ---------------------------------
 
@@ -74,8 +77,11 @@ git -C "$d" add . >/dev/null 2>&1
 git -C "$d" commit -qm seed >/dev/null 2>&1
 out=$(run "$d")
 rm -rf "$d"
-[ -z "$out" ] && ok "a clean tree is silent even when verify.sh would fail" \
-    || bad "a clean tree is silent: got $out"
+if [ -z "$out" ]; then
+    ok "a clean tree is silent even when verify.sh would fail"
+else
+    bad "a clean tree is silent: got $out"
+fi
 
 # --- the hook's own exit status is always 0 -----------------------------------
 
@@ -83,8 +89,11 @@ d=$(scratch "$(body 1)")
 (cd "$d" && printf '{}' | sh "$GATE" >/dev/null 2>&1)
 rc=$?
 rm -rf "$d"
-[ "$rc" -eq 0 ] && ok "the hook itself exits 0 while reporting a failure" \
-    || bad "the hook itself exits 0 while reporting a failure: got $rc"
+if [ "$rc" -eq 0 ]; then
+    ok "the hook itself exits 0 while reporting a failure"
+else
+    bad "the hook itself exits 0 while reporting a failure: got $rc"
+fi
 
 printf '\n%d/%d passed\n' "$pass" "$((pass + fail))"
 [ "$fail" -eq 0 ]
