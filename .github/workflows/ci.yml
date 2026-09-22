@@ -4,30 +4,15 @@ on:
   push:
   pull_request:
 
+# One job calling ./verify.sh, not a second definition of green written in
+# YAML beside the first one. Two definitions drift, and then there is none.
 jobs:
-  # The gates first. A gate that has stopped matching blocks nothing and looks
-  # exactly like approval, so the tests for the gates are the part of this
-  # repository that most needs CI.
-  gates:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - run: sh hooks/edit-gate_test.sh
-      - run: sh hooks/stop-build_test.sh
-      - run: sh hooks/charter-check_test.sh
-      - run: python hooks/commit-gate_test.py
-
-  # The example project, through the same verify.sh the harness calls. Not a
-  # second definition of green written in YAML beside the first one.
-  example:
+  verify:
     runs-on: ubuntu-latest
     env:
-      # The end-to-end test skips without this, and the full tier reports a
-      # skipped test as exit 2 - could not run. CI is the place that has to
-      # actually run it.
+      # The example's end-to-end test skips without this, and the full tier
+      # reports a skipped test as exit 2 - could not run. CI is the place that
+      # has to actually run it.
       HARNESS_EXAMPLE_E2E: "1"
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +20,7 @@ jobs:
         with:
           # stable, not a pinned patch: govulncheck reports standard library
           # vulnerabilities against the toolchain that built the binary, so a
-          # toolchain left behind for a few months fails this job on its own.
+          # toolchain left behind for a few months fails this on its own.
           go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: sh verify.sh
-        working-directory: example
