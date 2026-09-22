@@ -24,11 +24,19 @@ jobs:
   # second definition of green written in YAML beside the first one.
   example:
     runs-on: ubuntu-latest
+    env:
+      # The end-to-end test skips without this, and the full tier reports a
+      # skipped test as exit 2 - could not run. CI is the place that has to
+      # actually run it.
+      HARNESS_EXAMPLE_E2E: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          # stable, not a pinned patch: govulncheck reports standard library
+          # vulnerabilities against the toolchain that built the binary, so a
+          # toolchain left behind for a few months fails this job on its own.
+          go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: sh verify.sh
         working-directory: example
