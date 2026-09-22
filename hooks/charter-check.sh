@@ -40,11 +40,20 @@ note() { # $1 = label, $2 = present(1)/absent(empty)
 # a lower-case probe by accident; the same repository on Linux would have been
 # reported as missing a file that was right there. A check that cries wolf gets
 # ignored, and an ignored check is the same as no check.
+#
+# The comparison walks a glob rather than piping ls into grep. Parsing ls
+# breaks on a filename containing a newline, and a probe that silently finds
+# nothing is the failure this whole repository is about.
 t() {
     [ -e "$1" ] && { echo 1; return; }
-    _d=$(dirname "$1"); _b=$(basename "$1")
+    _d=$(dirname "$1")
+    _b=$(basename "$1" | tr '[:upper:]' '[:lower:]')
     [ -d "$_d" ] || return
-    ls -1 "$_d" 2>/dev/null | grep -qix "$_b" && echo 1
+    for _f in "$_d"/*; do
+        [ -e "$_f" ] || continue
+        _n=$(basename "$_f" | tr '[:upper:]' '[:lower:]')
+        [ "$_n" = "$_b" ] && { echo 1; return; }
+    done
 }
 
 note "CLAUDE.md"   "$(t CLAUDE.md)"
