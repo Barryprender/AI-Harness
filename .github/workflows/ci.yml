@@ -23,4 +23,19 @@ jobs:
           # toolchain left behind for a few months fails this on its own.
           go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      # Not the runner's preinstalled shellcheck. Its version moves when the
+      # image moves, and a linter version is part of what green means: 0.11.0
+      # dropped SC3013 and the image's older one had not, so the same file
+      # passed on a laptop and failed here. verify.sh refuses to run against
+      # any version but the pinned one, and .shellcheck-version is the single
+      # place that version is written.
+      - name: install the pinned shellcheck
+        run: |
+          v=$(cat .shellcheck-version)
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v$v/shellcheck-v$v.linux.x86_64.tar.xz" | tar -xJ
+          sudo install "shellcheck-v$v/shellcheck" /usr/local/bin/shellcheck
+          rm -rf "shellcheck-v$v"
+          shellcheck --version
+
       - run: sh verify.sh
