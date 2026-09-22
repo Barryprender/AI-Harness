@@ -89,7 +89,11 @@ fi
 echo "shellcheck"
 if command -v shellcheck >/dev/null 2>&1; then
     if ! out=$(shellcheck -s sh hooks/*.sh templates/go/verify.sh example/verify.sh verify.sh 2>&1); then
-        fail "shellcheck" "$(printf '%s' "$out" | head -40)"
+        # Not truncated, on purpose. This was head -40, and the first CI run
+        # that failed had fifteen findings - so five of them were cut off the
+        # bottom of the report and looked like they did not exist. A failure
+        # report that hides failures is the thing this script exists to stop.
+        fail "shellcheck" "$out"
     fi
 else
     cannot_run "shellcheck" "not installed - https://www.shellcheck.net"
