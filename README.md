@@ -10,11 +10,12 @@ commit rather than take my word for it.
 
 ```sh
 git clone <this repo> && cd claude-harness
-sh hooks/edit-gate_test.sh
-sh hooks/stop-build_test.sh
-sh hooks/charter-check_test.sh
-python hooks/commit-gate_test.py
+sh verify.sh --fast          # the four gates, tested, about a second
+sh verify.sh                 # everything, including the example project
 ```
+
+The harness governs itself: that `verify.sh` is the same file the hooks call
+and the same file CI runs.
 
 ---
 
@@ -199,6 +200,8 @@ hooks/
   stop-build.sh             end of turn: runs verify.sh --fast, reports
   charter-check.sh          session start: names missing standing artifacts
   *_test.sh, *_test.py      one test per gate
+verify.sh                   this repository's own definition of green - the
+                            gates' tests, the linter, the example project
 templates/go/verify.sh      a working verify.sh: gofmt, go vet, go test,
                             skip detection, govulncheck, exits 0/1/2
 example/                    a stub HTTP service for the harness to govern
