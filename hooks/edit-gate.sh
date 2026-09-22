@@ -44,11 +44,28 @@ trap 'rm -rf "$tmp"' EXIT
 #
 # Keeping this gate free of python means it still works on a machine where
 # python is missing or - see the note in commit-gate.sh - present but broken.
+#
+# It compares characters one at a time rather than calling gsub. The gsub
+# version is shorter and it was wrong: a backslash in a gsub replacement is
+# processed a second time, so the escape for a quote came out as two
+# backslashes and a quote, which ends the JSON string early. Every compiler
+# error message is full of quotes, so the first real failure this gate reported
+# was unparseable. sprintf("%c", 92) has no such ambiguity.
 esc() {
-    tr -d '\000-\010\013\014\016-\037' | awk '
-        { gsub(/\\/, "\\\\\\\\"); gsub(/"/, "\\\\\""); gsub(/\t/, "    ")
-          if (NR > 1) printf "\\n"
-          printf "%s", $0 }'
+    tr -d '\000-\010\013-\037' | awk '
+        BEGIN { bs = sprintf("%c", 92); q = sprintf("%c", 34) }
+        {
+            if (NR > 1) printf "%s", bs "n"
+            out = ""
+            for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == bs)        out = out bs bs
+                else if (c == q)    out = out bs q
+                else if (c == "\t") out = out "    "
+                else                out = out c
+            }
+            printf "%s", out
+        }'
 }
 
 # Both of these are called directly, never on the right of a pipe: the right
