@@ -54,6 +54,16 @@ done
 # operator, not waving it through and not crashing the session.
 [ -n "$PY" ] || emit ask "The commit gate could not run: no python interpreter is on PATH, so the commit message and the staged file count were never inspected. This is not an approval. Check the message for an attribution trailer and confirm the staging is deliberate before you continue."
 
+# Both helper programs below are held in quoted heredocs, and the quoted
+# delimiter is the point of them.
+#
+# Passing a program as `python -c "..."` puts it inside a double-quoted shell
+# string, where $, backslash and backticks still belong to the shell. A pair of
+# backticks in a *Python comment* was being run as a command substitution
+# before Python ever saw the file. It was harmless by luck. A quoted heredoc
+# hands the text over untouched, which is the only version of this that is
+# correct rather than lucky.
+
 # The command, but only from the point where it actually invokes a commit.
 #
 # Matching the bare phrase anywhere in the text is too loose: a script that
@@ -61,7 +71,7 @@ done
 # no commit at all, and this gate denied exactly that the first time it ran. An
 # invocation is the phrase at the start of the command or straight after a
 # separator, and only what follows it is the commit.
-cmd=$(printf '%s' "$payload" | "$PY" -c "
+find_commit=$(cat <<'PYPROG'
 import sys, json, re
 try:
     d = json.load(sys.stdin)
@@ -72,7 +82,10 @@ m = re.search(r'(?:^|[;&|]\s*|\n\s*)git\s+commit\b', raw)
 if not m:
     sys.exit(0)
 print(raw[m.start():].replace(chr(10), ' '))
-" 2>/dev/null)
+PYPROG
+)
+
+cmd=$(printf '%s' "$payload" | "$PY" -c "$find_commit" 2>/dev/null)
 
 [ -n "$cmd" ] || exit 0
 
@@ -85,7 +98,7 @@ esac
 # How many distinct paths this commit would touch: what is staged now, plus what
 # the same command line is about to stage. Counting the union rather than adding
 # the two keeps a file named in both from being counted twice.
-staged=$(printf '%s' "$payload" | "$PY" -c "
+count_paths=$(cat <<'PYPROG'
 import json, re, shlex, subprocess, sys
 
 def git(*args):
@@ -120,8 +133,8 @@ for t in tokens:
         cur.append(t)
 cmds.append(cur)
 
-# -A/-u/. stage whatever the tree happens to hold, and so does `commit -a`. The
-# count then has to come from the tree, not from the argument list.
+# -A, -u and . stage whatever the tree happens to hold, and so does commit -a.
+# The count then has to come from the tree, not from the argument list.
 EVERYTHING = {'.', '-A', '--all', '-u', '--update', ':/', '*'}
 
 for c in cmds:
@@ -144,7 +157,10 @@ for c in cmds:
                 break
 
 print(len(paths))
-" 2>/dev/null)
+PYPROG
+)
+
+staged=$(printf '%s' "$payload" | "$PY" -c "$count_paths" 2>/dev/null)
 
 if [ "${staged:-0}" -gt 1 ]; then
     emit ask "$staged files are staged for one commit. The convention here is one commit per file, ordered so the history builds up sensibly and each commit can be read on its own. Confirm if this is a deliberate exception (a rename, or a file that cannot stand alone); otherwise stage and commit them one at a time."
