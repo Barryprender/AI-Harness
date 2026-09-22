@@ -86,17 +86,28 @@ fi
 # The shell scripts are the product, so they get a linter when one is here. Not
 # installed is exit 2 and never exit 0: we did not look is a different answer
 # from we looked and it is clean.
+# The version is part of what green means, so it is pinned in one file that
+# both this script and CI read. 0.11.0 dropped SC3013; the runner's
+# preinstalled shellcheck had not. The same file passed here and failed there,
+# and neither report was wrong - they were answering different questions. A
+# version this script did not expect is therefore a check that did not run,
+# not a check that passed.
 echo "shellcheck"
-if command -v shellcheck >/dev/null 2>&1; then
-    if ! out=$(shellcheck -s sh hooks/*.sh templates/go/verify.sh example/verify.sh verify.sh 2>&1); then
-        # Not truncated, on purpose. This was head -40, and the first CI run
-        # that failed had fifteen findings - so five of them were cut off the
-        # bottom of the report and looked like they did not exist. A failure
-        # report that hides failures is the thing this script exists to stop.
-        fail "shellcheck" "$out"
-    fi
-else
+want=$(cat .shellcheck-version 2>/dev/null)
+have=$(shellcheck --version 2>/dev/null | sed -n 's/^version: *//p')
+
+if [ -z "$have" ]; then
     cannot_run "shellcheck" "not installed - https://www.shellcheck.net"
+elif [ -z "$want" ]; then
+    cannot_run "shellcheck" ".shellcheck-version is missing - nothing to pin against"
+elif [ "$have" != "$want" ]; then
+    cannot_run "shellcheck" "version $have, but .shellcheck-version pins $want - a different version is a different set of rules"
+elif ! out=$(shellcheck -s sh hooks/*.sh templates/go/verify.sh example/verify.sh verify.sh 2>&1); then
+    # Not truncated, on purpose. This was head -40, and the first CI run
+    # that failed had fifteen findings - so five of them were cut off the
+    # bottom of the report and looked like they did not exist. A failure
+    # report that hides failures is the thing this script exists to stop.
+    fail "shellcheck" "$out"
 fi
 
 # The example, through its own verify.sh rather than through a second copy of
