@@ -1,0 +1,108 @@
+#!/bin/sh
+# This repository's own definition of green.
+#
+# It is here because charter-check.sh said it was missing, which is the check
+# doing its job. A harness that does not govern itself is a slide deck.
+#
+# Contract, the same one HARNESS.md asks of any project:
+#   exit 0   everything ran and passed
+#   exit 1   something ran and failed
+#   exit 2   something could not run at all
+#   --fast   the cheap tier, seconds not minutes
+
+set -u
+
+fast=0
+[ "${1:-}" = "--fast" ] && fast=1
+
+cd "$(dirname "$0")" || exit 2
+
+notes=$(mktemp 2>/dev/null || echo "./.verify.$$")
+trap 'rm -f "$notes"' EXIT
+: > "$notes"
+
+failed=0
+unrun=0
+
+fail() {
+    failed=1
+    printf 'FAILED: %s\n' "$1" >> "$notes"
+    [ -n "${2:-}" ] && printf '%s\n\n' "$2" >> "$notes"
+}
+
+cannot_run() {
+    unrun=1
+    printf 'FAILED: %s could not run - %s\n' "$1" "$2" >> "$notes"
+}
+
+finish() {
+    if [ -s "$notes" ]; then
+        echo
+        cat "$notes"
+    fi
+    [ "$failed" -eq 1 ] && exit 1
+    [ "$unrun" -eq 1 ] && exit 2
+    echo "OK"
+    exit 0
+}
+
+# --- the gates ----------------------------------------------------------------
+#
+# These are the whole product, and a gate that has stopped matching is silent.
+# They run in the fast tier because they take about a second and because there
+# is no version of this repository where skipping them is acceptable.
+
+for t in hooks/edit-gate_test.sh hooks/stop-build_test.sh hooks/charter-check_test.sh; do
+    echo "$t"
+    if ! out=$(sh "$t" 2>&1); then
+        fail "$t" "$(printf '%s' "$out" | grep '^FAIL' | head -10)"
+    fi
+done
+
+# The commit gate is the one hook that needs python, so its test does too.
+# Probed by running it: on Windows, python3 is often an alias that exists,
+# resolves, and then refuses to run.
+PY=""
+for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c "" >/dev/null 2>&1; then
+        PY="$c"
+        break
+    fi
+done
+
+echo "hooks/commit-gate_test.py"
+if [ -n "$PY" ]; then
+    if ! out=$("$PY" hooks/commit-gate_test.py 2>&1); then
+        fail "hooks/commit-gate_test.py" "$(printf '%s' "$out" | grep '^FAIL' | head -10)"
+    fi
+else
+    cannot_run "hooks/commit-gate_test.py" "no working python interpreter on PATH"
+fi
+
+[ "$fast" -eq 1 ] && finish
+
+# --- the full tier ------------------------------------------------------------
+
+# The shell scripts are the product, so they get a linter when one is here. Not
+# installed is exit 2 and never exit 0: we did not look is a different answer
+# from we looked and it is clean.
+echo "shellcheck"
+if command -v shellcheck >/dev/null 2>&1; then
+    if ! out=$(shellcheck -s sh hooks/*.sh templates/go/verify.sh example/verify.sh verify.sh 2>&1); then
+        fail "shellcheck" "$(printf '%s' "$out" | head -40)"
+    fi
+else
+    cannot_run "shellcheck" "not installed - https://www.shellcheck.net"
+fi
+
+# The example, through its own verify.sh rather than through a second copy of
+# its checks written here.
+echo "example/verify.sh"
+out=$(cd example && sh verify.sh 2>&1)
+case $? in
+    0) ;;
+    1) fail "example/verify.sh" "$(printf '%s' "$out" | sed -n '/FAILED:/,$p' | head -30)" ;;
+    *) cannot_run "example/verify.sh" "$(printf '%s' "$out" | sed -n '/FAILED:/,$p' | head -10)" ;;
+esac
+
+finish
