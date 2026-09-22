@@ -8,6 +8,11 @@ AI-assisted development: four hooks, one contract, and a small Go service for
 the hooks to actually govern, so you can clone it and watch a gate block a bad
 commit rather than take my word for it.
 
+The projects it runs over are Go services with `html/template` front ends and
+SQLite behind them. None of that is in the gates — everything stack-specific
+lives in the project's own `verify.sh`, which is the point of the design — but
+that is the stack it has been used on, rather than a stack it might work on.
+
 ```sh
 git clone <this repo> && cd claude-harness
 sh verify.sh --fast          # the four gates, tested, about a second
