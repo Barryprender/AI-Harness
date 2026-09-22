@@ -109,10 +109,20 @@ have=$(printf '%s' "$have" | sed 's/, $//')
 [ -n "$have" ] || have="none"
 
 esc() {
-    tr -d '\000-\010\013\014\016-\037' | awk '
-        { gsub(/\\/, "\\\\\\\\"); gsub(/"/, "\\\\\""); gsub(/\t/, "    ")
-          if (NR > 1) printf "\\n"
-          printf "%s", $0 }'
+    tr -d '\000-\010\013-\037' | awk '
+        BEGIN { bs = sprintf("%c", 92); q = sprintf("%c", 34) }
+        {
+            if (NR > 1) printf "%s", bs "n"
+            out = ""
+            for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == bs)        out = out bs bs
+                else if (c == q)    out = out bs q
+                else if (c == "\t") out = out "    "
+                else                out = out c
+            }
+            printf "%s", out
+        }'
 }
 
 ctx="Standing artifacts missing from this repository: $missing.
