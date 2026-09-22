@@ -232,8 +232,13 @@ Full contract in [HARNESS.md](HARNESS.md).
 the `hooks` block into `~/.claude/settings.json` and fix the paths.
 
 Read the scripts before you do that. They are short, and a hook you have not
-read is a program you have given a shell on every edit you make. See
-[SECURITY.md](SECURITY.md) for what they touch.
+read is a program you have given a shell on every edit you make.
+
+[SECURITY.md](SECURITY.md) says what they touch, and states the threat model:
+these gates defend against mistakes and drift, not against anyone who can write
+to them. A local gate is advisory. Authority belongs on a protected branch, in
+CI, and in a signing key that does not live on the machine's disk - see
+[ADR 0002](docs/adr/0002-treat-the-harness-as-advisory.md).
 
 ---
 
