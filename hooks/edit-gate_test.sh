@@ -86,18 +86,43 @@ esac
 
 # The output has to be valid JSON when the failing tool prints quotes,
 # backslashes and tabs - which every compiler error message does. This case is
-# the reason the escaping exists, and it has caught it being wrong.
-d=$(scratch '#!/bin/sh
-echo "FAILED: go vet"
-printf "\tcannot use \\"x\\" (untyped string) as C:\\\\path\\\\to\\\\thing\\n"
-exit 1')
+# the reason the escaping exists, and it caught the escaping being wrong.
+#
+# The failing script is written with a quoted heredoc and printf '%s', so what
+# it prints is exactly the text below. An earlier version of this case built it
+# with echo and escapes, the escapes were eaten before they reached the file,
+# and the case passed against output that had no quotes in it at all. A test
+# that passes for the wrong reason is worse than no test.
+d=$(scratch "")
+cat > "$d/verify.sh" <<'VERIFY'
+#!/bin/sh
+printf '%s\n' 'FAILED: go vet'
+printf '%s\n' 'cannot use "x" (untyped string) as int value in argument'
+printf '%s\n' 'see C:\path\to\thing	and a tab before this'
+exit 1
+VERIFY
 out=$(cd "$d" && printf '{}' | sh "$GATE" 2>&1)
 rm -rf "$d"
-if command -v python >/dev/null 2>&1 && python -c "" >/dev/null 2>&1; then
-    if printf '%s' "$out" | python -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
-        ok "the decision is valid JSON when the output has quotes and backslashes"
+PY=""
+for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c "" >/dev/null 2>&1; then
+        PY="$c"
+        break
+    fi
+done
+
+if [ -n "$PY" ]; then
+    # Valid JSON, and the text survives it. Escaping that strips the quotes
+    # instead of escaping them would also parse.
+    if printf '%s' "$out" | "$PY" -c "
+import json, sys
+r = json.load(sys.stdin)['reason']
+assert 'cannot use \"x\" (untyped string)' in r, r
+assert 'C:' + chr(92) + 'path' + chr(92) + 'to' + chr(92) + 'thing' in r, r
+" >/dev/null 2>&1; then
+        ok "the decision is valid JSON and keeps quotes and backslashes intact"
     else
-        bad "the decision is valid JSON when the output has quotes and backslashes:
+        bad "the decision is valid JSON and keeps quotes and backslashes intact:
       $out"
     fi
 else
