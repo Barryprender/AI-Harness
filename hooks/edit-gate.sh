@@ -68,6 +68,11 @@ esc() {
         }'
 }
 
+# Duplicates out, order kept. This was sort -u, which on Windows is system32's
+# sort.exe: it reads -u as a second input file and dies with "Input file
+# specified two times." See the note on the marker file below.
+uniq_lines() { awk '!seen[$0]++' "$1"; }
+
 # Both of these are called directly, never on the right of a pipe: the right
 # side of a pipe is a subshell, and exiting there would let the caller carry on
 # and print a second decision after the first.
@@ -86,12 +91,27 @@ report() { # $1 = message
 # file left dirty from an hour ago.
 
 git status --porcelain 2>/dev/null | sed -e 's/^...//' -e 's/^.* -> //' > "$tmp/dirty"
+# A marker file stamped 120 seconds ago, so the window becomes a [ -nt ] the
+# shell does itself. This was find -newermt. On Windows, find resolves to
+# system32's find.exe, which does not know the flag, printed nothing, and made
+# every changed file look untouched - so the gate went silent, which is the one
+# outcome it exists to prevent. Any external tool whose name Windows also ships
+# is a trap of this shape.
+#
+# If neither stamp works the marker is removed and every dirty file counts.
+# That is wider than intended and it is the right way to be wrong: the gate
+# runs when it did not have to, rather than not running when it did.
+: > "$tmp/window"
+touch -d '-120 seconds' "$tmp/window" 2>/dev/null ||
+    touch -A -000200 "$tmp/window" 2>/dev/null ||
+    rm -f "$tmp/window"
+
 : > "$tmp/files"
 while IFS= read -r p; do
     [ -n "$p" ] || continue
     f="$root/$p"
     [ -f "$f" ] || continue
-    if [ -n "$(find "$f" -newermt '-120 seconds' -print 2>/dev/null)" ]; then
+    if [ ! -e "$tmp/window" ] || [ "$f" -nt "$tmp/window" ]; then
         printf '%s\n' "$f" >> "$tmp/files"
     fi
 done < "$tmp/dirty"
@@ -120,7 +140,7 @@ while IFS= read -r f; do
 done < "$tmp/files"
 
 if [ -s "$tmp/verifiers" ]; then
-    sort -u "$tmp/verifiers" > "$tmp/verifiers.u"
+    uniq_lines "$tmp/verifiers" > "$tmp/verifiers.u"
     while IFS= read -r d; do
         [ -n "$d" ] || continue
         out=$(cd "$d" && sh verify.sh --fast 2>&1)
@@ -173,7 +193,7 @@ while IFS= read -r f; do
 done < "$tmp/files"
 
 [ -s "$tmp/pkgs" ] || exit 0
-sort -u "$tmp/pkgs" > "$tmp/pkgs.u"
+uniq_lines "$tmp/pkgs" > "$tmp/pkgs.u"
 while IFS= read -r d; do
     [ -n "$d" ] || continue
     if ! out=$(cd "$d" && go vet . 2>&1); then
