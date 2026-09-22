@@ -1,0 +1,34 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # The gates first. A gate that has stopped matching blocks nothing and looks
+  # exactly like approval, so the tests for the gates are the part of this
+  # repository that most needs CI.
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: sh hooks/edit-gate_test.sh
+      - run: sh hooks/stop-build_test.sh
+      - run: sh hooks/charter-check_test.sh
+      - run: python hooks/commit-gate_test.py
+
+  # The example project, through the same verify.sh the harness calls. Not a
+  # second definition of green written in YAML beside the first one.
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: sh verify.sh
+        working-directory: example
