@@ -111,6 +111,10 @@ while IFS= read -r p; do
     [ -n "$p" ] || continue
     f="$root/$p"
     [ -f "$f" ] || continue
+    # -nt is outside POSIX on paper only: bash, dash, busybox ash, ksh and
+    # zsh all implement it, and shellcheck 0.11.0 dropped the warning. CI has
+    # an older shellcheck that still raises it, so it is silenced by name.
+    # shellcheck disable=SC3013
     if [ ! -e "$tmp/window" ] || [ "$f" -nt "$tmp/window" ]; then
         printf '%s\n' "$f" >> "$tmp/files"
     fi
