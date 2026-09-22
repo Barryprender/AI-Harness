@@ -17,7 +17,7 @@ ok()  { pass=$((pass + 1)); printf 'PASS  %s\n' "$1"; }
 bad() { fail=$((fail + 1)); printf 'FAIL  %s\n' "$1"; }
 
 # A repository with every standing artifact present.
-complete() {
+full_repo() {
     d=$(mktemp -d)
     git -C "$d" init -q .
     git -C "$d" config user.email t@t.t
@@ -36,7 +36,7 @@ run() { (cd "$1" && printf '{}' | sh "$GATE" 2>&1); }
 # --- each artifact, removed one at a time -------------------------------------
 
 for f in CLAUDE.md README.md SECURITY.md verify.sh; do
-    d=$(complete)
+    d=$(full_repo)
     rm -f "$d/$f"
     out=$(run "$d")
     rm -rf "$d"
@@ -46,7 +46,7 @@ for f in CLAUDE.md README.md SECURITY.md verify.sh; do
     esac
 done
 
-d=$(complete)
+d=$(full_repo)
 rm -rf "$d/docs/adr"
 out=$(run "$d")
 rm -rf "$d"
@@ -57,7 +57,7 @@ esac
 
 # --- a workflow that warns instead of failing ---------------------------------
 
-d=$(complete)
+d=$(full_repo)
 printf 'jobs:\n  v:\n    continue-on-error: true\n    steps:\n      - run: sh verify.sh\n' \
     > "$d/.github/workflows/ci.yml"
 out=$(run "$d")
@@ -69,7 +69,7 @@ esac
 
 # --- CI that reimplements the checks instead of calling verify.sh -------------
 
-d=$(complete)
+d=$(full_repo)
 printf 'jobs:\n  v:\n    steps:\n      - run: go test ./...\n' > "$d/.github/workflows/ci.yml"
 out=$(run "$d")
 rm -rf "$d"
@@ -80,7 +80,7 @@ esac
 
 # --- an SBOM older than the dependency manifest -------------------------------
 
-d=$(complete)
+d=$(full_repo)
 printf 'module x\n\ngo 1.25\n' > "$d/go.mod"
 echo '{}' > "$d/sbom.json"
 git -C "$d" add . >/dev/null 2>&1
@@ -101,19 +101,25 @@ esac
 
 # --- the case that keeps the check worth reading ------------------------------
 
-d=$(complete)
+d=$(full_repo)
 out=$(run "$d")
 rm -rf "$d"
-[ -z "$out" ] && ok "a complete repository produces no output" \
-    || bad "a complete repository produces no output: got $out"
+if [ -z "$out" ]; then
+    ok "a complete repository produces no output"
+else
+    bad "a complete repository produces no output: got $out"
+fi
 
 # --- not a project at all -----------------------------------------------------
 
 d=$(mktemp -d)
 out=$(run "$d")
 rm -rf "$d"
-[ -z "$out" ] && ok "a directory that is not a project is ignored" \
-    || bad "a directory that is not a project is ignored: got $out"
+if [ -z "$out" ]; then
+    ok "a directory that is not a project is ignored"
+else
+    bad "a directory that is not a project is ignored: got $out"
+fi
 
 printf '\n%d/%d passed\n' "$pass" "$((pass + fail))"
 [ "$fail" -eq 0 ]
