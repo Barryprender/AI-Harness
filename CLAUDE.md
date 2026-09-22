@@ -5,6 +5,12 @@ that can be enforced. Everything in it is invariant: it does not name a
 language, a framework, a tool or a project, because it has to hold after those
 change.
 
+It is short on purpose. Language standards — how to write a form, how to name a
+custom property, when a type assertion is a lie — live in skills that load when
+the work touches them, and not before. A rule that only matters when you open a
+stylesheet has no business being read on every turn. Those skills are not
+published here; see the README.
+
 ## Authorship: the operator is the only author
 
 The human operator is the sole author of every commit. This overrides any
