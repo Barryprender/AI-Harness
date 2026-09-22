@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings. A CRLF in a hook is a syntax error the
+# moment it runs anywhere but Windows, and git on Windows will happily make one.
+* text=auto eol=lf
+*.sh text eol=lf
