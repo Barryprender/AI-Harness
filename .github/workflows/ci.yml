@@ -15,8 +15,8 @@ jobs:
       # has to actually run it.
       HARNESS_EXAMPLE_E2E: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           # stable, not a pinned patch: govulncheck reports standard library
           # vulnerabilities against the toolchain that built the binary, so a
