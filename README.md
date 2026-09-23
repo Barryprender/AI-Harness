@@ -1,4 +1,4 @@
-# claude-harness
+# Claude-harness
 
 This repository does not make an AI agent write correct code. It makes it hard
 to ship code that has not been verified first.
