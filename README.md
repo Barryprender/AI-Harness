@@ -1,127 +1,57 @@
 # Claude-harness
 
+Four [Claude Code](https://docs.claude.com/en/docs/claude-code) hooks. They run
+your project's checks after each edit and before each commit, and they stop the
+agent when a check fails.
+
+A hook is a script that Claude Code runs at a set moment, such as after a file
+edit. In this README, a **gate** is a hook that can stop the agent.
+
 This repository does not make an AI agent write correct code. It makes it hard
 to ship code that has not been verified first.
 
-It is a working extraction of the governance harness I run over my own
-AI-assisted development: four hooks, one contract, and a small Go service for
-the hooks to actually govern, so you can clone it and watch a gate block a bad
-commit rather than take my word for it.
+It is a cut-down copy of the setup I use on my own AI-assisted projects: four
+hooks, one contract, and a small Go service for the hooks to check. You can
+clone it and watch a gate block a bad commit yourself.
 
-The projects it runs over are Go services with `html/template` front ends and
-SQLite behind them. None of that is in the gates — everything stack-specific
-lives in the project's own `verify.sh`, which is the point of the design — but
-that is the stack it has been used on, rather than a stack it might work on.
-
-```sh
-git clone <this repo> && cd claude-harness
-sh verify.sh --fast          # the four gates, tested, about a second
-sh verify.sh                 # everything, including the example project
-```
-
-The harness governs itself: that `verify.sh` is the same file the hooks call
-and the same file CI runs.
+My own projects are Go services with `html/template` front ends and SQLite.
+The gates do not depend on that stack. Everything stack-specific lives in each
+project's own `verify.sh`. Even so, Go and SQLite are the only stack it has
+actually been used on.
 
 ---
 
-## The argument
+## Requirements
 
-Six positions. Each one is a decision that cost something to get wrong.
+- `sh` and `git`. On Windows, use Git Bash.
+- Go.
+- Python 3, for the commit gate and its test.
+- For the full run only: `shellcheck` 0.11.0 (the version in
+  `.shellcheck-version`) and `govulncheck`.
 
-### 1. Block or report is a risk decision, not a setting
+If a tool is missing, `verify.sh` exits `2`. That means "could not run". It
+does not mean "passed".
 
-Blocking is not a measure of how much a check matters. It is a measure of how
-reversible the moment is.
+## Quick start
 
-A commit is where a claim stops being provisional. Once it is pushed it is in
-other people's clones and its message is read by people who were not there.
-That is worth blocking. A half-finished edit is not: the agent is still
-working, and the repair is known and bounded, so blocking there is cheap and
-useful.
-
-The end of a turn is the subtle one. A **blocking** end-of-turn hook can trap
-the agent in a loop, because the only thing that would satisfy the block is the
-work the block is preventing — and the operator never gets a turn to look. So
-`stop-build.sh` reports and hands the decision back.
-
-Recorded as [ADR 0001](docs/adr/0001-block-where-a-claim-becomes-permanent.md).
-
-### 2. A gate must never crash the session
-
-Every hook here exits `0`, always, whatever it found. The decision travels in
-the JSON it prints, never in its own exit status.
-
-A guardrail that crashes takes down the workflow it was guarding, and the first
-thing anyone does with a guardrail that breaks their workflow is remove it. The
-tests assert this directly: *the gate itself exits 0 while blocking*.
-
-### 3. Three exit codes, not two
-
-```
-0   every check ran and passed
-1   a check ran and failed
-2   a check could not run at all
+```sh
+git clone https://github.com/Barryprender/AI-Harness.git claude-harness
+cd claude-harness
+sh verify.sh --fast          # the fast tier: the gates' own tests, about a second
+sh verify.sh                 # everything, including the example project
 ```
 
-Collapsing `2` into `0` is the single easiest way for a verification system to
-lie to you, and it lies silently. A suite that skipped half of itself because a
-database was not listening prints `ok` and exits `0`. A vulnerability scanner
-that is not installed finds no vulnerabilities.
+The **fast tier** is the quick subset of checks. The hooks run it after every
+edit, so it must take seconds.
 
-The example project carries a test that skips without `HARNESS_EXAMPLE_E2E=1`,
-so you can see the difference for yourself:
-
-```
-FAILED: 1 test(s) could not run - they skipped, usually a missing service or
-build tag - a skipped test has not passed
---- SKIP: TestHealthEndToEnd (0.00s)
-```
-
-`go test ./...` calls that run green.
-
-### 4. Change detection comes from `git status`, not the tool payload
-
-An earlier version of the edit gate matched the edit tools only. A careful,
-surgical, multi-line change is easier to make through a shell script than
-through an edit tool — so the most careful edits were exactly the ones
-bypassing the gate.
-
-Anything that infers *what changed* from the shape of the event will miss
-whatever it did not anticipate. `git status` already knows. `edit-gate.sh`
-drains its payload and reads nothing out of it, on purpose.
-
-### 5. Gates are tested
-
-A gate that has silently stopped matching produces no output, blocks nothing,
-and looks exactly like approval. There is no error. Nothing in a normal session
-would ever tell you.
-
-Each gate here has a test beside it, and CI runs all four. This is not a
-theoretical risk — writing this repository, the edit gate's JSON escaping was
-wrong in a way that made every real failure unparseable, and the test that was
-supposed to catch it was passing against input that had been mangled before it
-arrived. Both are fixed; both are in the git history.
-
-### 6. Disclosure lives in prose, not in commit metadata
-
-No `Co-Authored-By`, no `Generated with`, on any commit. `commit-gate.sh`
-denies them outright, and this repository's own history has none.
-
-A trailer is a claim about authorship pushed into a field nobody reads, in a
-place it cannot be qualified. A paragraph is a disclosure a person stands
-behind. The agent writes code; the operator reviews it, commits it, and is
-accountable for it. Authorship follows accountability, not keystrokes.
-
-Which is why the disclosure for this repository is a sentence rather than a
-trailer: **the code here was written with an AI coding agent, under the harness
-it contains, and I read every line of it before it was committed.**
+The harness checks itself: the hooks, CI and you all run the same `verify.sh`.
 
 ---
 
 ## Watch it work
 
-Break the example service on purpose. The gate reads the tree, finds
-`example/verify.sh`, runs its fast tier, and blocks with the failure fed back.
+Break the example service on purpose. The gate finds `example/verify.sh`, runs
+its fast tier, and blocks. It gives the failure back to the agent.
 
 **Bad formatting:**
 
@@ -150,7 +80,8 @@ FAIL
 FAIL    harness/example    1.874s
 ```
 
-**An attribution trailer on a commit:**
+**An attribution trailer on a commit** (a trailer is a line such as
+`Co-Authored-By:` at the end of a commit message):
 
 ```
 decision: deny
@@ -162,7 +93,7 @@ in prose that a human stands behind, not in commit metadata. Remove the
 trailer and commit again.
 ```
 
-**A toolchain nobody has updated** (the full tier, not the fast one):
+**An old Go toolchain** (the full run, not the fast tier):
 
 ```
 FAILED: govulncheck
@@ -175,19 +106,53 @@ Vulnerability #1: GO-2026-6090
     Fixed in: crypto/tls@go1.25.13
 ```
 
-That last one is not a staged example. It is what the full tier reported on the
-machine this repository was written on, against a service whose only import is
-the standard library.
+That last one is real output. The full run reported it on the machine this
+repository was written on. The example service imports only the standard
+library.
 
-To reproduce them yourself:
+To try the edit gate yourself:
 
 ```sh
+# 1. Run the example's checks. They pass.
 cd example
-sh verify.sh --fast          # the tier the harness calls: seconds
-sh verify.sh                 # everything, including the vulnerability scan
-printf '%s\n' 'func x()  int {' >> main.go && cd .. && printf '{}' | sh hooks/edit-gate.sh
+sh verify.sh --fast
+
+# 2. Add badly formatted code to the example.
+printf '%s\n' 'func x()  int {' >> main.go
+
+# 3. Run the edit gate by hand, as Claude Code would after an edit.
+#    It prints JSON with "decision":"block" and the failures.
+cd ..
+printf '{}' | sh hooks/edit-gate.sh
+
+# 4. Undo the change.
 git checkout -- example/main.go
 ```
+
+---
+
+## Wiring it up
+
+`settings.example.json` shows the four hooks set up for Claude Code. Copy its
+`hooks` block into `~/.claude/settings.json`.
+
+Each hook command points to `$HOME/claude-harness`:
+
+```json
+{ "type": "command", "command": "sh $HOME/claude-harness/hooks/edit-gate.sh" }
+```
+
+If you cloned somewhere else, change that part of each of the four paths.
+
+Read the scripts before you do this. They are short. A hook you have not read
+is a program that gets a shell every time you edit a file.
+
+[SECURITY.md](SECURITY.md) says what the hooks touch. It also says what they
+protect against: mistakes and drift. They do not protect against anyone who can
+change the hook files. A local gate is only advice. Real enforcement belongs on
+a protected branch, in CI, and in a signing key that is not stored on the
+machine's disk. See
+[ADR 0002](docs/adr/0002-treat-the-harness-as-advisory.md).
 
 ---
 
@@ -196,7 +161,7 @@ git checkout -- example/main.go
 ```
 CLAUDE.md                   the constitution: authorship, the ladder before
                             writing code, skipping is not passing
-HARNESS.md                  the contract - what verify.sh must guarantee, and
+HARNESS.md                  the contract: what verify.sh must guarantee, and
                             what the harness guarantees in return
 hooks/
   edit-gate.sh              after an edit: runs verify.sh --fast, blocks
@@ -205,69 +170,147 @@ hooks/
   stop-build.sh             end of turn: runs verify.sh --fast, reports
   charter-check.sh          session start: names missing standing artifacts
   *_test.sh, *_test.py      one test per gate
-verify.sh                   this repository's own definition of green - the
+verify.sh                   this repository's own definition of green: the
                             gates' tests, the linter, the example project
 templates/go/verify.sh      a working verify.sh: gofmt, go vet, go test,
                             skip detection, govulncheck, exits 0/1/2
-example/                    a stub HTTP service for the harness to govern
+example/                    a stub HTTP service for the harness to check
 settings.example.json       how the four hooks are wired up
 docs/adr/                   decisions that would otherwise be reconstructed
                             from the code
 ```
 
+A **turn** is one reply from the agent. The end of a turn is when it stops and
+hands control back to you.
+
 ### The contract, in one paragraph
 
 The harness decides **when** to check and **what happens** when a check fails.
 The project decides **what green means** for itself, in one executable
-`verify.sh` in its root — the same script CI runs, so there is one definition
-of green and not two that drift. Neither side adapts to the other, and the
-harness never looks inside. A project in any language is governable as long as
-its `verify.sh` exits 0, 1 or 2 honestly and has a cheap `--fast` tier.
+`verify.sh` in its root. CI runs the same script, so the local and CI
+definitions of green cannot drift apart. Neither side adapts to the other, and
+the harness never looks inside. A project in any language works with the
+harness if its `verify.sh` exits 0, 1 or 2 honestly and has a cheap `--fast`
+tier.
 
 Full contract in [HARNESS.md](HARNESS.md).
 
-### Wiring it up
+---
 
-`settings.example.json` shows the four hooks configured for Claude Code. Copy
-the `hooks` block into `~/.claude/settings.json` and fix the paths.
+## Why it works this way
 
-Read the scripts before you do that. They are short, and a hook you have not
-read is a program you have given a shell on every edit you make.
+Each of these six decisions came from getting something wrong first.
 
-[SECURITY.md](SECURITY.md) says what they touch, and states the threat model:
-these gates defend against mistakes and drift, not against anyone who can write
-to them. A local gate is advisory. Authority belongs on a protected branch, in
-CI, and in a signing key that does not live on the machine's disk - see
-[ADR 0002](docs/adr/0002-treat-the-harness-as-advisory.md).
+### 1. Block or report is a risk decision
+
+Whether a gate blocks depends on how easy the moment is to undo. How much the
+check matters has little to do with it.
+
+A commit is where a change becomes hard to take back. Once it is pushed, it is
+in other people's clones, and people who were not there read its message. That
+is worth blocking. A half-finished edit is different. The agent is still
+working and the fix is known and small, so blocking there is cheap and useful.
+
+A **blocking** end-of-turn hook can trap the agent in a loop. The only thing
+that would satisfy the block is the work the block is preventing, and the
+operator never gets a turn to look. So `stop-build.sh` reports and hands the
+decision back.
+
+Recorded as [ADR 0001](docs/adr/0001-block-where-a-claim-becomes-permanent.md).
+
+### 2. A gate must never crash the session
+
+Every hook here exits `0`, always, whatever it found. The decision travels in
+the JSON it prints, never in its own exit status.
+
+A guardrail that crashes takes down the workflow it was guarding. The first
+thing anyone does with a guardrail that breaks their workflow is remove it. The
+tests check this directly: *the gate itself exits 0 while blocking*.
+
+### 3. Three exit codes, not two
+
+```
+0   every check ran and passed
+1   a check ran and failed
+2   a check could not run at all
+```
+
+If `2` collapses into `0`, a verification system reports success for work it
+never did, and nothing warns you. A suite that skipped half of itself because a
+database was not listening prints `ok` and exits `0`. A vulnerability scanner
+that is not installed finds no vulnerabilities.
+
+The example project has a test that skips unless `HARNESS_EXAMPLE_E2E=1` is
+set, so you can see the difference for yourself:
+
+```
+FAILED: 1 test(s) could not run - they skipped, usually a missing service or
+build tag - a skipped test has not passed
+--- SKIP: TestHealthEndToEnd (0.00s)
+```
+
+Plain `go test ./...` reports this run as a pass.
+
+### 4. Change detection comes from `git status`, not the tool payload
+
+An earlier version of the edit gate only ran after the edit tools. But a
+careful multi-line change is often easier to make with a shell script than with
+an edit tool. So the most careful edits were the ones that skipped the gate.
+
+A gate that guesses *what changed* from the shape of the event will miss
+whatever it did not expect. `git status` already knows. So `edit-gate.sh` reads
+its input, throws it away, and asks `git status` what changed.
+
+### 5. Gates are tested
+
+A gate that has silently stopped matching prints nothing, blocks nothing, and
+looks exactly like approval. No error appears in a normal session to warn you.
+
+Each gate here has a test beside it, and CI runs all four. This happened while
+writing this repository. The edit gate's JSON escaping was wrong, so every real
+failure it reported could not be parsed. The test that should have caught it
+was passing, because its input had been damaged before it arrived. Both are
+fixed, and both fixes are in the git history.
+
+### 6. Disclosure lives in prose
+
+No `Co-Authored-By`, no `Generated with`, on any commit. `commit-gate.sh`
+denies them outright, and this repository's own history has none.
+
+A trailer claims authorship in a field nobody reads, with no room to qualify
+the claim. A paragraph can say what the agent did and what a person checked.
+The agent writes code; the operator reviews it, commits it, and is accountable
+for it, so the operator is the author.
+
+The disclosure for this repository is therefore a sentence: **the code here was
+written with an AI coding agent, under the harness it contains, and I read
+every line of it before it was committed.**
 
 ---
 
 ## Not built yet
 
-Stated plainly, because overclaiming here costs more than it earns.
-
-- **Multi-language support is a contract, not an implementation.** The gates
-  are language-agnostic and the delegation works, but the only `verify.sh`
-  template in this repository is the Go one. A TypeScript or Python project
-  would write its own today.
+- **Multi-language support exists only as a contract.** The gates do not depend
+  on a language, and handing checks to `verify.sh` works. But the only
+  `verify.sh` template in this repository is the Go one. A TypeScript or Python
+  project would have to write its own today.
 - **There is no stack auto-detection.** A project either has a `verify.sh` or
-  it gets the thin fallback path, which is Go-only and deliberately minimal.
-  Automatically working out what a project is remains a proposal.
-- **The fallback paths are not the point.** They exist so a project without a
-  `verify.sh` is not completely ungoverned. They are worse than a `verify.sh`
-  in every case and they are meant to be deleted by adoption.
+  it gets the small fallback check, which is Go-only. Working out a project's
+  stack automatically is still only an idea.
+- **The fallback paths are a stopgap.** They exist so a project without a
+  `verify.sh` still gets some checks. A `verify.sh` is better in every case.
+  You can delete the fallbacks once every project has one.
 - **`charter-check.sh` probes for existence, not for content.** It can tell
   you there is no `SECURITY.md`. It cannot tell you the one you have is true.
-- **The method skills are not published here.** The configuration this came
-  from also carries on-demand skills: house standards for HTML, CSS and
-  TypeScript, and writers for ADRs and project charters. They are why
-  [CLAUDE.md](CLAUDE.md) is 83 lines rather than 400 — a rule that only matters
-  when you open a stylesheet should not be loaded on every turn. They are
-  opinions rather than mechanism, so they stayed private. The mechanism is
-  here; the taste is not.
-- **This is extracted from a private configuration, generalized.** The
-  mechanism is what ran; the specific checks in the original were tied to
-  projects that are not mine to publish.
+- **The method skills are not published here.** My own setup also has skills
+  that load only when needed: house standards for HTML, CSS and TypeScript,
+  and writers for ADRs and project charters. They keep
+  [CLAUDE.md](CLAUDE.md) at 83 lines instead of 400, because a rule that only
+  matters when you open a stylesheet should not load on every turn. They are
+  opinions, so they stayed private. This repository has the mechanism only.
+- **This is a general version of a private setup.** The mechanism is the one
+  I run. The specific checks in the original belong to projects I cannot
+  publish.
 
 ---
 
